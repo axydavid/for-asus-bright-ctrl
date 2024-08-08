@@ -88,11 +88,9 @@ INT IndicatorWnd::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 
   // Register hot keys for brightness control
   if (RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_DOWN),
-                     MOD_CONTROL | MOD_WIN | MOD_SHIFT, VK_OEM_COMMA) == 0 ||
+                     MOD_NONE, VK_VOLUMEDOWN) == 0 ||
       RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_UP),
-                     MOD_CONTROL | MOD_WIN | MOD_SHIFT, VK_OEM_PERIOD) == 0 ||
-      RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_SYNC),
-                     MOD_CONTROL | MOD_WIN | MOD_SHIFT, VK_OEM_2) == 0) {
+                     MOD_NONE, VK_VOLUMEUP) == 0) {
     LOGE_V_LN("cannot register hotkeys: ", GetLastError());
   }
 
@@ -120,9 +118,6 @@ void IndicatorWnd::OnHotKey(UINT nHotKeyId, UINT nKey1, UINT nKey2) {
     break;
   case HotKeyType::BRIGHTNESS_UP:
     NewFac = std::clamp(Fac + 0.1f, 0.f, 1.f);
-    break;
-  case HotKeyType::BRIGHTNESS_SYNC:
-    NewFac = -1;
     break;
   default:
     return CWnd::OnHotKey(nHotKeyId, nKey1, nKey2);
