@@ -19,8 +19,8 @@ The app tries to find the MyASUS package, locate its RPC client (the part that c
 
 ## Usage
 Controls are:
-- `Ctrl + Shift + Win + <`: brightness down 10%;
-- `Ctrl + Shift + Win + >`: brightness up 10%;
+- `Brightness down button`: brightness down 10%;
+- `Brightness up button`: brightness up 10%;
 - `Ctrl + Shift + Win + /`: re-synchronize brightness, for example when changed from MyASUS app in parallel.
 
 Also note that when using HDR these changes are not applied immediately, but it seems that they will be applied when exiting HDR. MyASUS' app in this case does not allow changing the brightness at all, which seems reasonable.
