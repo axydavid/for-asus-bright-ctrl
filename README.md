@@ -7,7 +7,7 @@ This is a simple app that I created to control MyASUS' "Flicker-Free Dimming" br
   - `for-asus-bright-ctrl.exe` - the app;
   - `mfc140u.dll` - MFC dll;
   - `install.ps1`, `install.reg`, `uninstall.ps1`, `uninstall.reg` - (un)installation scripts.
-- run `./install.ps1` in PowerShell from the extracted directory (important). Note that script execution should be enabled, see more [here, for example](https://superuser.com/questions/106360/how-to-enable-execution-of-powershell-scripts). It will display a UAC prompt half-way through, click "Yes" or similar. It is needed to modify the Windows registry.
+- run `./install.ps1` in PowerShell from the extracted directory (important). Note that script execution should be enabled(run Powershell as admin, set-executionpolicy remotesigned). It will display a UAC prompt half-way through, click "Yes" or similar. It is needed to modify the Windows registry.
 
   This will add and start a task `for-asus-bright-ctrl` through the Windows Task Scheduler to run this program on every current user's log-in. Additionally, a task `for-asus-bright-ctrl regedit` to apply `install.reg` will be added with the same trigger and started as well. Warning: this will disable security checks that the `AsusOptimization.exe` RPC server does by setting a value in the Windows registry, so that this process can communicate with it. Also note that you shouldn't move this directory or change its contents, otherwise the task will fail and nothing will work.
 
