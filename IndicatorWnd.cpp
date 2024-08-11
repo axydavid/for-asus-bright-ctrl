@@ -69,7 +69,7 @@ void BrightnessOverlay::DrawOverlay(float brightness)
     memDC.CreateCompatibleDC(&dc);
     CBitmap bitmap;
     bitmap.CreateCompatibleBitmap(&dc, rect.Width(), rect.Height());
-    memDC.SelectObject(&bitmap);
+    CBitmap* pOldBitmap = memDC.SelectObject(&bitmap);
 
     // Draw background
     memDC.FillSolidRect(rect, RGB(32, 32, 32)); // Dark gray background
@@ -99,8 +99,11 @@ void BrightnessOverlay::DrawOverlay(float brightness)
 
     // Update the layered window
     BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
-    UpdateLayeredWindow(&dc, nullptr, nullptr, &rect.Size(),
-        &memDC, &CPoint(0, 0), 0, &blend, ULW_ALPHA);
+    CPoint ptSrc(0, 0);
+    CSize sizeWnd = rect.Size();
+    UpdateLayeredWindow(&dc, NULL, &sizeWnd, &memDC, &ptSrc, 0, &blend, ULW_ALPHA);
+
+    memDC.SelectObject(pOldBitmap);
 }
 
 void BrightnessOverlay::OnPaint()
