@@ -1,0 +1,42 @@
+name: Build ASUS Brightness Control
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v2
+
+    - name: Add MSBuild to PATH
+      uses: microsoft/setup-msbuild@v1.1
+
+    - name: Setup Visual Studio Developer Command Prompt
+      uses: microsoft/setup-msbuild@v1.1
+      with:
+        vs-version: '[17.0,18.0)'
+
+    - name: Install C++/WinRT
+      run: |
+        nuget install Microsoft.Windows.CppWinRT -OutputDirectory packages
+
+    - name: Build project
+      run: |
+        msbuild /p:Configuration=Release /p:Platform=x64 for-asus-bright-ctrl.sln
+
+    - name: Copy executable and scripts
+      run: |
+        mkdir artifact
+        copy "x64\Release\for-asus-bright-ctrl.exe" artifact\
+        xcopy /E /I "scripts" "artifact\scripts\"
+
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: ASUS-Brightness-Control
+        path: artifact\
