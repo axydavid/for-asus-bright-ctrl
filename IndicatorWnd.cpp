@@ -152,19 +152,20 @@ END_MESSAGE_MAP()
 INT IndicatorWnd::OnCreate(LPCREATESTRUCT lpCreateStruct) {
     if (CWnd::OnCreate(lpCreateStruct) == -1)
         return -1;
+
+    // Register new hotkeys
     if (RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_DOWN),
-        MOD_CONTROL | MOD_WIN | MOD_SHIFT, VK_OEM_COMMA) == 0 ||
+        MOD_CONTROL | MOD_SHIFT, VK_DOWN) == 0 ||
         RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_UP),
-            MOD_CONTROL | MOD_WIN | MOD_SHIFT, VK_OEM_PERIOD) == 0 ||
-        RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_SYNC),
-            MOD_CONTROL | MOD_WIN | MOD_SHIFT, VK_OEM_2) == 0) {
-        LOGE_V_LN("cannot register hotkeys: ", GetLastError());
+            MOD_CONTROL | MOD_SHIFT, VK_UP) == 0) {
+        LOGE_V_LN("Cannot register hotkeys: ", GetLastError());
     }
+
     return 0;
 }
 
 void IndicatorWnd::OnHotKey(UINT nHotKeyId, UINT nKey1, UINT nKey2) {
-    LOGI_V_LN("detected a hotkey press");
+    LOGI_V_LN("Detected a hotkey press");
     float NewFac = Fac;
     switch (static_cast<HotKeyType>(nHotKeyId)) {
     case HotKeyType::BRIGHTNESS_DOWN:
@@ -173,16 +174,12 @@ void IndicatorWnd::OnHotKey(UINT nHotKeyId, UINT nKey1, UINT nKey2) {
     case HotKeyType::BRIGHTNESS_UP:
         NewFac = std::clamp(Fac + 0.1f, 0.f, 1.f);
         break;
-    case HotKeyType::BRIGHTNESS_SYNC:
-        NewFac = -1;
-        break;
     default:
         return CWnd::OnHotKey(nHotKeyId, nKey1, nKey2);
     }
     setBrightness(NewFac);
     CWnd::OnHotKey(nHotKeyId, nKey1, nKey2);
 }
-
 void IndicatorWnd::setBrightness(float NewFac) {
     if (NewFac < 0) {
         LOGI_V_LN("invalidated brightness");
