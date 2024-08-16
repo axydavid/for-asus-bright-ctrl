@@ -1,213 +1,194 @@
 #include "IndicatorWnd.h"
-#include "Logger.h"
-#include <winrt/Windows.Foundation.h>
 
 #define LOG_MODULE "IndicatorWnd"
 
-class BrightnessOverlay : public CWnd
-{
-public:
-    void Show(float brightness);
-
-private:
-    void Create();
-    void DrawOverlay(float brightness);
-    void PositionWindow();
-
-    DECLARE_MESSAGE_MAP()
-    afx_msg void OnPaint();
-    afx_msg BOOL OnEraseBkgnd(CDC* pDC);
-    afx_msg void OnTimer(UINT_PTR nIDEvent);
-};
-
-BEGIN_MESSAGE_MAP(BrightnessOverlay, CWnd)
-    ON_WM_PAINT()
-    ON_WM_ERASEBKGND()
-    ON_WM_TIMER()
-END_MESSAGE_MAP()
-
-void BrightnessOverlay::Show(float brightness)
-{
-    if (!m_hWnd)
-        Create();
-
-    PositionWindow();
-    DrawOverlay(brightness);
-
-    SetTimer(1, 3000, nullptr);
-}
-
-void BrightnessOverlay::Create()
-{
-    CreateEx(WS_EX_TOPMOST | WS_EX_LAYERED | WS_EX_TRANSPARENT,
-        AfxRegisterWndClass(0), _T("Brightness Overlay"), WS_POPUP,
-        0, 0, 250, 70, // Width and height of the overlay
-        nullptr, nullptr);
-}
-
-void BrightnessOverlay::PositionWindow()
-{
-    CRect screenRect;
-    GetDesktopWindow()->GetWindowRect(&screenRect);
-    
-    CRect windowRect;
-    GetWindowRect(&windowRect);
-    
-    int x = (screenRect.Width() - windowRect.Width()) / 2;
-    int y = screenRect.bottom - windowRect.Height() - 20; // 20 pixels margin from bottom
-    
-    SetWindowPos(&wndTopMost, x, y, 0, 0, SWP_NOSIZE | SWP_SHOWWINDOW);
-}
-
-void BrightnessOverlay::DrawOverlay(float brightness)
-{
-    CClientDC dc(this);
-    CRect rect;
-    GetClientRect(&rect);
-
-    CDC memDC;
-    memDC.CreateCompatibleDC(&dc);
-    CBitmap bitmap;
-    bitmap.CreateCompatibleBitmap(&dc, rect.Width(), rect.Height());
-    CBitmap* pOldBitmap = memDC.SelectObject(&bitmap);
-
-    // Draw background
-    memDC.FillSolidRect(rect, RGB(32, 32, 32)); // Dark gray background
-
-    // Draw brightness bar
-    CRect barRect = rect;
-    barRect.DeflateRect(10, 30, 10, 30); // Adjust these values to position the bar
-    memDC.FillSolidRect(barRect, RGB(64, 64, 64)); // Lighter gray for the empty part of the bar
-
-    int barWidth = static_cast<int>(barRect.Width() * brightness);
-    CRect filledBarRect = barRect;
-    filledBarRect.right = filledBarRect.left + barWidth;
-    memDC.FillSolidRect(filledBarRect, RGB(255, 255, 255)); // White for the filled part
-
-    // Draw brightness percentage text
-    CString text;
-    text.Format(_T("%d%%"), static_cast<int>(brightness * 100));
-    memDC.SetTextColor(RGB(255, 255, 255)); // White text
-    memDC.SetBkMode(TRANSPARENT);
-    CFont font;
-    font.CreateFont(16, 0, 0, 0, FW_NORMAL, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
-                    OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, DEFAULT_QUALITY,
-                    DEFAULT_PITCH | FF_DONTCARE, _T("Segoe UI"));
-    CFont* pOldFont = memDC.SelectObject(&font);
-    memDC.DrawText(text, rect, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-    memDC.SelectObject(pOldFont);
-
-    // Update the layered window
-    BLENDFUNCTION blend = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
-    CPoint ptSrc(0, 0);
-    CSize sizeWnd = rect.Size();
-    UpdateLayeredWindow(&dc, NULL, &sizeWnd, &memDC, &ptSrc, 0, &blend, ULW_ALPHA);
-
-    memDC.SelectObject(pOldBitmap);
-}
-
-void BrightnessOverlay::OnPaint()
-{
-    CPaintDC dc(this);
-}
-
-BOOL BrightnessOverlay::OnEraseBkgnd(CDC* pDC)
-{
-    return TRUE;
-}
-
-void BrightnessOverlay::OnTimer(UINT_PTR nIDEvent)
-{
-    if (nIDEvent == 1)
-    {
-        ShowWindow(SW_HIDE);
-        KillTimer(1);
-    }
-    CWnd::OnTimer(nIDEvent);
-}
-
 IndicatorWnd::IndicatorWnd() {
-    winrt::init_apartment();
+  // Load the brightess icon bitmap
+  CBitmap BrightIcon;
+  if (BrightIcon.LoadBitmap(IDB_BRIGHTNESS_ICON)) {
+    // Get icon size
+    BITMAP bm{};
+    BrightIcon.GetBitmap(&bm);
+    IconSize = bm.bmWidth;
+    // Create DC to draw the icon later
+    BitmapDC.CreateCompatibleDC(NULL);
+    BitmapDCObj.Attach(BitmapDC.SelectObject(BrightIcon.Detach()));
+  } else {
+    LOGE_V_LN("cannot load the brightness icon: ", GetLastError());
+  }
+
+  // Create DC which contains the progress bar mask
+  BarDC.CreateCompatibleDC(NULL);
+  BarDC.AssertValid();
+  CBitmap BarBuf;
+  BarBuf.CreateCompatibleBitmap(&BarDC, IconSize * 6, IconSize);
+  BarBuf.AssertValid();
+  BarDCObj.Attach(BarDC.SelectObject(BarBuf.Detach()));
+
+  // Draw the progress bar mask
+  {
+    // Construct progress bar mask from params
+    int height = int(PROGRESS_BAR_HEIGHT_FAC * IconSize);
+    int width = int(PROGRESS_BAR_WIDTH_FAC * IconSize);
+    int padding = int(PROGRESS_BAR_PADDING * IconSize);
+    int half = IconSize / 2;
+
+    CRgn Rgn;
+    Rgn.CreateRoundRectRgn(padding, half - height / 2, padding + width,
+                           half + height / 2, height, height);
+    Rgn.AssertValid();
+    BarDC.SetDCBrushColor(RGB(255, 255, 255));
+    CBrush DCBrush;
+    DCBrush.CreateStockObject(DC_BRUSH);
+    DCBrush.AssertValid();
+    BarDC.FillRgn(&Rgn, &DCBrush);
+  }
+
+  const wchar_t CLASS_NAME[] = L"`win` window class";
+
+  CreateEx(WS_EX_TRANSPARENT | WS_EX_TOPMOST | WS_EX_TOOLWINDOW |
+               WS_EX_NOACTIVATE | WS_EX_LAYERED,
+           AfxRegisterWndClass(NULL), TEXT("Flicker-Free Dimming Indicator"),
+           WS_POPUP, CFrameWnd::rectDefault, NULL, 0);
 }
 
 IndicatorWnd::~IndicatorWnd() {
-    winrt::uninit_apartment();
+  CBitmap BrightIcon;
+  BrightIcon.Attach(BitmapDC.SelectObject(BitmapDCObj));
+  CBitmap BarBuf;
+  BarBuf.Attach(BarDC.SelectObject(BarDCObj));
 }
 
 void IndicatorWnd::setBrightnessCallback(std::function<void(int)> Callback) {
-    BrightnessCallback = std::move(Callback);
+  BrightnessCallback = std::move(Callback);
 }
 
 void IndicatorWnd::resetBrightness(float NewFac) {
-    LOGI_V_LN("reset brightness from ", Fac, " to ", NewFac);
-    Fac = NewFac;
+  LOGI_V_LN("reset brightness from ", Fac, " to ", NewFac);
+  Fac = NewFac;
 }
 
 BEGIN_MESSAGE_MAP(IndicatorWnd, CWnd)
-    ON_WM_CREATE()
-    ON_WM_HOTKEY()
-    ON_MESSAGE(WM_USER_RESET_BRIGHTNESS, OnResetBrightness)
+  ON_WM_CREATE()
+  ON_WM_TIMER()
+  ON_WM_PAINT()
+  ON_WM_HOTKEY()
+  ON_WM_ENDSESSION()
+  ON_MESSAGE(WM_USER_RESET_BRIGHTNESS, OnResetBrightness)
 END_MESSAGE_MAP()
 
 INT IndicatorWnd::OnCreate(LPCREATESTRUCT lpCreateStruct) {
-    if (CWnd::OnCreate(lpCreateStruct) == -1)
-        return -1;
+  if (CWnd::OnCreate(lpCreateStruct) == -1)
+    return -1;
 
-    // Register new hotkeys
-    if (RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_DOWN),
-        0, VK_F4) == 0 ||  // F4 for brightness down
-        RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_UP),
-            0, VK_F5) == 0) {  // F5 for brightness up
-        LOGE_V_LN("Cannot register hotkeys: ", GetLastError());
-    }
+  // Set actual window size and hide for now
+  int width_with_padding = int(PROGRESS_BAR_WIDTH_WITH_PADDING_FAC * IconSize);
+  SetWindowPos(NULL, 0, 0, IconSize + width_with_padding, IconSize,
+               SWP_NOZORDER | SWP_HIDEWINDOW);
 
-    return 0;
+  // Register hot keys for brightness control
+  if (RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_DOWN),
+                     0, VK_F4) == 0 ||
+      RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_UP),
+                     0, VK_F5) == 0) {
+    LOGE_V_LN("cannot register hotkeys: ", GetLastError());
+  }
+
+  // Make the window click-through
+  SetLayeredWindowAttributes(0, BYTE(255 * OPACITY), LWA_ALPHA);
+  return 0;
+}
+
+void IndicatorWnd::OnTimer(UINT_PTR nIdEvent) {
+  assert(nIdEvent == TIMER_ID);
+  // Hide window after some time
+  KillTimer(TIMER_ID);
+  ShowWindow(FALSE);
+
+  CWnd::OnTimer(nIdEvent);
 }
 
 void IndicatorWnd::OnHotKey(UINT nHotKeyId, UINT nKey1, UINT nKey2) {
-    LOGI_V_LN("Detected a hotkey press");
-    float NewFac = Fac;
-    switch (static_cast<HotKeyType>(nHotKeyId)) {
-    case HotKeyType::BRIGHTNESS_DOWN:
-        NewFac = std::clamp(Fac - 0.1f, 0.f, 1.f);
-        break;
-    case HotKeyType::BRIGHTNESS_UP:
-        NewFac = std::clamp(Fac + 0.1f, 0.f, 1.f);
-        break;
-    default:
-        return CWnd::OnHotKey(nHotKeyId, nKey1, nKey2);
-    }
-    setBrightness(NewFac);
-    CWnd::OnHotKey(nHotKeyId, nKey1, nKey2);
-}
-void IndicatorWnd::setBrightness(float NewFac) {
-    if (NewFac < 0) {
-        LOGI_V_LN("invalidated brightness");
-        BrightnessCallback(-1);
-    }
-    else {
-        LOGI_V_LN("changed brightness: ", Fac, "->", NewFac);
-        Fac = NewFac;
-        BrightnessCallback(int(round(Fac * 100.0f)));
-        ShowWindowsBrightnessOverlay(Fac);
-    }
+  // Change brightness with 10% increments
+  LOGI_V_LN("detected a hotkey press");
+  float NewFac = Fac;
+  switch (static_cast<HotKeyType>(nHotKeyId)) {
+  case HotKeyType::BRIGHTNESS_DOWN:
+    NewFac = std::clamp(Fac - 0.1f, 0.f, 1.f);
+    break;
+  case HotKeyType::BRIGHTNESS_UP:
+    NewFac = std::clamp(Fac + 0.1f, 0.f, 1.f);
+    break;
+  default:
+    return CWnd::OnHotKey(nHotKeyId, nKey1, nKey2);
+  }
+
+  setBrightness(NewFac);
+  CWnd::OnHotKey(nHotKeyId, nKey1, nKey2);
 }
 
-void IndicatorWnd::ShowWindowsBrightnessOverlay(float brightness) {
-    static BrightnessOverlay brightnessOverlay;
-    brightnessOverlay.Show(brightness);
+void IndicatorWnd::setBrightness(float NewFac) {
+  if (NewFac < 0) {
+    LOGI_V_LN("invalidated brightness");
+    BrightnessCallback(-1);
+  } else {
+    LOGI_V_LN("changed brightness: ", Fac, "->", NewFac);
+    Fac = NewFac;
+    BrightnessCallback(int(round(Fac * 100.0f)));
+
+    // Show the indicator now for some time
+    InvalidateRect(NULL, TRUE);
+    SetWindowPos(&CWnd::wndTopMost, 0, 0, 0, 0,
+                 SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+    SetTimer(TIMER_ID, VISIBLE_US, NULL);
+  }
+}
+
+void IndicatorWnd::OnPaint() {
+  CPaintDC PaintDC(this);
+  CBrush DCBrush;
+  DCBrush.CreateStockObject(DC_BRUSH);
+
+  // Draw the background
+  {
+    RECT PaintRect{};
+    GetWindowRect(&PaintRect);
+    PaintDC.SetDCBrushColor(PROGRESS_BAR_BG_COLOR);
+    PaintDC.FillRect(&PaintRect, &DCBrush);
+  }
+
+  // Draw the brightness icon
+  PaintDC.BitBlt(0, 0, IconSize, IconSize, &BitmapDC, 0, 0, SRCCOPY);
+
+  // Draw the progress bar
+  {
+    // First, draw a rectangle of brightness level
+    LONG padding = LONG(PROGRESS_BAR_PADDING * IconSize);
+    RECT rc = {.left = IconSize + padding,
+               .top = 0,
+               .right = IconSize + padding +
+                        LONG(PROGRESS_BAR_WIDTH_FAC * Fac * IconSize),
+               .bottom = IconSize};
+
+    PaintDC.SetDCBrushColor(PROGRESS_BAR_COLOR);
+    PaintDC.FillRect(&rc, &DCBrush);
+  }
+  // Mask with the rounded corners mask
+  PaintDC.BitBlt(IconSize, 0,
+                 LONG(PROGRESS_BAR_WIDTH_WITH_PADDING_FAC * IconSize), IconSize,
+                 &BarDC, 0, 0, SRCAND);
 }
 
 LRESULT IndicatorWnd::OnResetBrightness(WPARAM wParam, LPARAM lParam) {
-    bool ShowIndicator = lParam;
-    float NewFac = (int)wParam / 100.0f;
-    if (ShowIndicator) {
-        LOGI_V_LN("showing indicator");
-        setBrightness(NewFac);
-    }
-    else {
-        LOGI_V_LN("not showing indicator");
-        resetBrightness(NewFac);
-    }
-    return 0;
+  bool ShowIndicator = lParam;
+  float NewFac = (int)wParam / 100.0f;
+
+  if (ShowIndicator) {
+    LOGI_V_LN("showing indicator");
+    setBrightness(NewFac);
+  } else {
+    LOGI_V_LN("not showing indicator");
+    resetBrightness(NewFac);
+  }
+  return 0;
 }
