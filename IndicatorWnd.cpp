@@ -155,9 +155,9 @@ INT IndicatorWnd::OnCreate(LPCREATESTRUCT lpCreateStruct) {
 
     // Register new hotkeys
     if (RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_DOWN),
-        MOD_CONTROL | MOD_SHIFT, VK_DOWN) == 0 ||
+        0, VK_F4) == 0 ||  // F4 for brightness down
         RegisterHotKey(m_hWnd, static_cast<int>(HotKeyType::BRIGHTNESS_UP),
-            MOD_CONTROL | MOD_SHIFT, VK_UP) == 0) {
+            0, VK_F5) == 0) {  // F5 for brightness up
         LOGE_V_LN("Cannot register hotkeys: ", GetLastError());
     }
 
